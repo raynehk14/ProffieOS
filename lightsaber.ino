@@ -1354,7 +1354,11 @@ public:
 	}
 	break;
 	
+#if NUM_BUTTONS == 1
+      case EVENTID(BUTTON_POWER, EVENT_CLICK_LONG, MODE_ON):
+#else
       case EVENTID(BUTTON_POWER, EVENT_CLICK_SHORT, MODE_ON):
+#endif
       case EVENTID(BUTTON_POWER, EVENT_LATCH_OFF, MODE_ON):
       case EVENTID(BUTTON_AUX, EVENT_LATCH_OFF, MODE_ON):
       case EVENTID(BUTTON_AUX2, EVENT_LATCH_OFF, MODE_ON):
@@ -1364,11 +1368,18 @@ public:
         Off();
         break;
 
+#if NUM_BUTTONS == 1
+      case EVENTID(BUTTON_POWER, EVENT_TWIST, MODE_ON):
+#else
       case EVENTID(BUTTON_POWER, EVENT_CLICK_LONG, MODE_ON):
+#endif
         SaberBase::DoForce();
         break;
 
       case EVENTID(BUTTON_AUX, EVENT_CLICK_SHORT, MODE_ON):
+#if NUM_BUTTONS == 1
+      case EVENTID(BUTTON_POWER, EVENT_CLICK_SHORT, MODE_ON):
+#endif
         // Avoid the base and the very tip.
 	// TODO: Make blast only appear on one blade!
         SaberBase::DoBlast();
