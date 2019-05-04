@@ -24,7 +24,11 @@ public:
   static bool Exists(const char* path) {
     return SD.exists(path);
   }
+  static bool Remove(const char* path) {
+    return SD.remove(path);
+  }
   static File Open(const char* path) {
+    if (!SD.exists(path)) return File();
     return SD.open(path);
   }
   static File OpenForWrite(const char* path) {
@@ -111,6 +115,9 @@ public:
   static bool Exists(const char* path) {
     if (!mounted_) return false;
     return DOSFS.exists(path);
+  }
+  static bool Remove(const char* path) {
+    return DOSFS.remove(path);
   }
   static File Open(const char* path) {
     if (!mounted_) return File();

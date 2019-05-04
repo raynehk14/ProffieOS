@@ -21,15 +21,16 @@
 // You can have multiple configuration files, and specify which one
 // to use here.
 
-// #define CONFIG_FILE "config/default_proffieboard_config.h"
+#define CONFIG_FILE "config/default_proffieboard_config.h"
 // #define CONFIG_FILE "config/default_v3_config.h"
 // #define CONFIG_FILE "config/crossguard_config.h"
 // #define CONFIG_FILE "config/graflex_v1_config.h"
 // #define CONFIG_FILE "config/prop_shield_fastled_v1_config.h"
 // #define CONFIG_FILE "config/owk_v2_config.h"
-#define CONFIG_FILE "config/test_bench_config.h"
+// #define CONFIG_FILE "config/test_bench_config.h"
 // #define CONFIG_FILE "config/toy_saber_config.h"
 // #define CONFIG_FILE "config/proffieboard_v1_test_bench_config.h"
+
 
 #ifdef CONFIG_FILE_TEST
 #undef CONFIG_FILE
@@ -40,7 +41,7 @@
 #include CONFIG_FILE
 #undef CONFIG_TOP
 
-#define ENABLE_DEBUG
+// #define ENABLE_DEBUG
 
 
 //
@@ -200,6 +201,9 @@ void PrintQuotedValue(const char *name, const char* str) {
         case '\n':
           STDOUT.print("\\n");
           break;
+        case '\t':
+          STDOUT.print("\\t");
+          break;
         case '\\':
           STDOUT.write('\\');
         default:
@@ -209,6 +213,14 @@ void PrintQuotedValue(const char *name, const char* str) {
     }
   }
   STDOUT.write('\n');
+}
+
+const char* mkstr(const char* str) {
+  int len = strlen(str);
+  char* ret = (char*)malloc(len + 1);
+  if (!ret) return "";
+  memcpy(ret, str, len + 1);
+  return ret;
 }
 
 #ifdef ENABLE_DEBUG
@@ -439,6 +451,8 @@ EFFECT(blaster);
 EFFECT(lockup);
 EFFECT(poweronf);
 EFFECT(font);   // also polyphonic
+EFFECT(bgnlock); // monophonic and polyphonic begin lock
+EFFECT(endlock); // Plecter endlock support, used for polyphonic name too
 
 // Polyphonic fonts
 EFFECT(blst);
@@ -606,6 +620,7 @@ struct is_same_type<T, T> { static const bool value = true; };
 #include "styles/file.h"
 #include "styles/stripes.h"
 #include "styles/random_blink.h"
+#include "styles/sequence.h"
 
 // functions
 #include "functions/ifon.h"
@@ -614,6 +629,9 @@ struct is_same_type<T, T> { static const bool value = true; };
 #include "functions/int_arg.h"
 #include "functions/sin.h"
 #include "functions/scale.h"
+#include "functions/battery_level.h"
+#include "functions/trigger.h"
+#include "functions/bump.h"
 
 // This macro has a problem with commas, please don't use it.
 #define EASYBLADE(COLOR, CLASH_COLOR) \
@@ -641,6 +659,21 @@ StyleAllocator StyleNormalPtr() {
   return StylePtr<InOutHelper<AddClash, out_millis, in_millis> >();
 }
 
+// Arguments: color, clash color, turn-on/off time
+template<class base_color,
+         class clash_color,
+         class out_millis,
+         class in_millis,
+         class lockup_flicker_color = WHITE,
+         class blast_color = WHITE>
+StyleAllocator StyleNormalPtrX() {
+  typedef AudioFlicker<base_color, lockup_flicker_color> AddFlicker;
+  typedef Blast<base_color, blast_color> AddBlast;
+  typedef Lockup<AddBlast, AddFlicker> AddLockup;
+  typedef SimpleClash<AddLockup, clash_color> AddClash;
+  return StylePtr<InOutHelperX<AddClash, InOutFuncX<out_millis, in_millis>> >();
+}
+
 // Rainbow blade.
 // Arguments: color, clash color, turn-on/off time
 template<int out_millis,
@@ -652,6 +685,19 @@ StyleAllocator StyleRainbowPtr() {
   typedef Lockup<Rainbow, AddFlicker> AddLockup;
   typedef SimpleClash<AddLockup, clash_color> AddClash;
   return StylePtr<InOutHelper<AddClash, out_millis, in_millis> >();
+}
+
+// Rainbow blade.
+// Arguments: color, clash color, turn-on/off time
+template<class out_millis,
+          class in_millis,
+          class clash_color = WHITE,
+          class lockup_flicker_color = WHITE>
+StyleAllocator StyleRainbowPtrX() {
+  typedef AudioFlicker<Rainbow, lockup_flicker_color> AddFlicker;
+  typedef Lockup<Rainbow, AddFlicker> AddLockup;
+  typedef SimpleClash<AddLockup, clash_color> AddClash;
+  return StylePtr<InOutHelperX<AddClash, InOutFuncX<out_millis, in_millis>> >();
 }
 
 // Stroboscope, flickers the blade at the desired frequency.
@@ -681,64 +727,17 @@ class NoLED;
 #include "blades/simple_blade.h"
 #include "blades/sub_blade.h"
 #include "blades/leds.h"
-
-#define CONFIGARRAY(X) X, NELEM(X)
-
-#if NUM_BLADES == 1
-#define ONCEPERBLADE(F) F(1)
-#elif NUM_BLADES == 2
-#define ONCEPERBLADE(F) F(1) F(2)
-#elif NUM_BLADES == 3
-#define ONCEPERBLADE(F) F(1) F(2) F(3)
-#elif NUM_BLADES == 4
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4)
-#elif NUM_BLADES == 5
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4) F(5)
-#elif NUM_BLADES == 6
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4) F(5) F(6)
-#elif NUM_BLADES == 7
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4) F(5) F(6) F(7)
-#elif NUM_BLADES == 8
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4) F(5) F(6) F(7) F(8)
-#elif NUM_BLADES == 9
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4) F(5) F(6) F(7) F(8) F(9)
-#elif NUM_BLADES == 10
-#define ONCEPERBLADE(F) F(1) F(2) F(3) F(4) F(5) F(6) F(7) F(8) F(9) F(10)
-#else
-#error NUM_BLADES is too big
-#endif
-
-struct Preset {
-  // Sound font.
-  const char* font;
-
-  // Sound track
-  const char* track;
-
-  // Blade config.
-#define DEFINE_BLADE_STYLES(N) StyleAllocator style_allocator##N;
-  ONCEPERBLADE(DEFINE_BLADE_STYLES);
-
-  const char* name;
-};
-
-struct BladeConfig {
-  // Blade identifier resistor.
-  int ohm;
-
-  // Blade driver.
-#define DEFINE_BLADES(N) BladeBase* blade##N;
-  ONCEPERBLADE(DEFINE_BLADES);
-
-  // Blade presets
-  Preset* presets;
-  size_t num_presets;
-};
+#include "common/preset.h"
+#include "common/blade_config.h"
+#include "common/current_preset.h"
+#include "styles/style_parser.h"
 
 #define CONFIG_PRESETS
 #include CONFIG_FILE
 #undef CONFIG_PRESETS
 
+BladeConfig* current_config = nullptr;
+ArgParserInterface* CurrentArgParser;
 
 
 // The Saber class implements the basic states and actions
@@ -749,7 +748,7 @@ public:
   const char* name() override { return "Saber"; }
 
   BladeStyle* current_style(){
-    return current_config_->blade1->current_style();
+    return current_config->blade1->current_style();
   }
 
   bool NeedsPower() {
@@ -801,9 +800,10 @@ public:
   }
 
   void Off() {
+    if (!SaberBase::IsOn()) return;
     if (SaberBase::Lockup()) {
-      SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
       SaberBase::DoEndLockup();
+      SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
     }
     SaberBase::TurnOff();
     if (unmute_on_deactivation_) {
@@ -823,7 +823,7 @@ public:
     uint32_t now = millis();
     uint32_t time_since_last_clash = now - last_clash_;
     if (time_since_last_clash < clash_timeout_) {
-      ms = max(ms, clash_timeout_ - time_since_last_clash);
+      ms = std::max<size_t>(ms, clash_timeout_ - time_since_last_clash);
     }
     last_clash_ = now;
     clash_timeout_ = ms;
@@ -906,74 +906,69 @@ public:
   }
 
   // Select preset (font/style)
-  void SetPreset(Preset* preset, bool announce) {
+  void SetPreset(int preset_num, bool announce) {
     bool on = SaberBase::IsOn();
     if (on) Off();
+    // First free all styles, then allocate new ones to avoid memory
+    // fragmentation.
+#define UNSET_BLADE_STYLE(N) \
+    delete current_config->blade##N->UnSetStyle();
+    ONCEPERBLADE(UNSET_BLADE_STYLE)
+    current_preset_.SetPreset(preset_num);
     if (announce) {
-      if (preset->name) {
-        SaberBase::DoMessage(preset->name);
+      if (current_preset_.name.get()) {
+        SaberBase::DoMessage(current_preset_.name.get());
       } else {
         char message[64];
         strcpy(message, "Preset: ");
-        itoa(preset - current_config_->presets + 1,
+        itoa(current_preset_.preset_num + 1,
              message + strlen(message), 10);
         strcat(message, "\n");
         strncat(message + strlen(message),
-                preset->font, sizeof(message) - strlen(message));
+                current_preset_.font.get(), sizeof(message) - strlen(message));
         message[sizeof(message) - 1] = 0;
         SaberBase::DoMessage(message);
       }
     }
 
-    current_preset_ = preset;
-
-    // First free all styles, then allocate new ones to avoid memory
-    // fragmentation.
-#define UNSET_BLADE_STYLE(N) \
-    delete current_config_->blade##N->UnSetStyle();
-    ONCEPERBLADE(UNSET_BLADE_STYLE)
 #define SET_BLADE_STYLE(N) \
-    current_config_->blade##N->SetStyle(preset->style_allocator##N->make());
+    current_config->blade##N->SetStyle(style_parser.Parse(current_preset_.current_style##N.get()));
     ONCEPERBLADE(SET_BLADE_STYLE)
-    chdir(preset->font);
+    chdir(current_preset_.font.get());
     if (on) On();
+    if (announce) SaberBase::DoNewFont();
   }
 
   // Go to the next Preset.
   void next_preset() {
-    if (current_config_->num_presets == 1)
-      return;
 #ifdef ENABLE_AUDIO
     beeper.Beep(0.05, 2000.0);
 #endif
-    Preset* tmp = current_preset_ + 1;
-    if (tmp == current_config_->presets + current_config_->num_presets) {
-      tmp = current_config_->presets;
-    }
-    SetPreset(tmp, true);
-    SaberBase::DoNewFont();
+    SetPreset(current_preset_.preset_num + 1, true);
   }
 
   // Go to the previous Preset.
   void previous_preset() {
-    if (current_config_->num_presets == 1)
-      return;
 #ifdef ENABLE_AUDIO
     beeper.Beep(0.05, 2000.0);
 #endif
-    Preset* tmp = current_preset_ - 1;
-    if (tmp == current_config_->presets - 1) {
-      tmp = current_config_->presets + current_config_->num_presets - 1;
-    }
-    SetPreset(tmp, true);
-    SaberBase::DoNewFont();
+    SetPreset(current_preset_.preset_num - 1, true);
   }
 
   // Measure and return the blade identifier resistor.
   float id() {
+#ifdef ENABLE_POWER_FOR_ID
+    ENABLE_POWER_FOR_ID power_pins_to_toggle;
+    STDOUT.println("Power for ID enabled. Turning on FETs");
+    power_pins_to_toggle.Init();
+    power_pins_to_toggle.Power(true);
+#endif
     pinMode(bladeIdentifyPin, INPUT_PULLUP);
     delay(100);
     int blade_id = analogRead(bladeIdentifyPin);
+#ifdef ENABLE_POWER_FOR_ID
+    power_pins_to_toggle.Power(false);
+#endif
     float volts = blade_id * 3.3f / 1024.0f;  // Volts at bladeIdentifyPin
     float amps = (3.3f - volts) / 33000;     // Pull-up is 33k
     float resistor = volts / amps;
@@ -1002,15 +997,15 @@ public:
     }
     STDOUT.print("blade= ");
     STDOUT.println(best_config);
-    current_config_ = blades + best_config;
+    current_config = blades + best_config;
 
 #define ACTIVATE(N) do {     \
-    if (!current_config_->blade##N) goto bad_blade;  \
-    current_config_->blade##N->Activate();           \
+    if (!current_config->blade##N) goto bad_blade;  \
+    current_config->blade##N->Activate();           \
   } while(0);
 
     ONCEPERBLADE(ACTIVATE);
-    SetPreset(current_config_->presets, false);
+    SetPreset(0, false);
     return;
 
    bad_blade:
@@ -1205,7 +1200,7 @@ protected:
       EnableAmplifier();
       track_player_ = GetFreeWavPlayer();
       if (track_player_) {
-        track_player_->Play(current_preset_->track);
+        track_player_->Play(current_preset_.track.get());
       } else {
         STDOUT.println("No available WAV players.");
       }
@@ -1224,7 +1219,8 @@ protected:
       Clash2();
     }
     if (battery_monitor.low()) {
-      if (current_preset_->style_allocator1 != &style_charging) {
+      // TODO: FIXME
+      if (current_style()->Charging()) {
         if (SaberBase::IsOn()) {
           STDOUT.print("Battery low, turning off. Battery voltage: ");
           STDOUT.println(battery_monitor.battery());
@@ -1430,8 +1426,8 @@ public:
         case EVENTID(BUTTON_POWER, EVENT_RELEASED, MODE_ON):
         case EVENTID(BUTTON_AUX, EVENT_RELEASED, MODE_ON):
           if (SaberBase::Lockup()) {
-            SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
             SaberBase::DoEndLockup();
+            SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
           } else {
             handled = false;
           }
@@ -1485,8 +1481,8 @@ public:
         SaberBase::DoBeginLockup();
         STDOUT.println("ON");
       } else {
-        SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
         SaberBase::DoEndLockup();
+        SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
         STDOUT.println("OFF");
       }
       return true;
@@ -1498,8 +1494,8 @@ public:
         SaberBase::DoBeginLockup();
         STDOUT.println("ON");
       } else {
-        SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
         SaberBase::DoEndLockup();
+        SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
         STDOUT.println("OFF");
       }
       return true;
@@ -1608,17 +1604,66 @@ public:
     }
 
     if (!strcmp(cmd, "list_presets")) {
-      for (size_t i = 0; i < current_config_->num_presets; i++) {
-        Preset *p = current_config_->presets + i;
-        PrintQuotedValue("FONT", p->font);
-        PrintQuotedValue("TRACK", p->track);
-        PrintQuotedValue("NAME", p->name);
+      CurrentPreset tmp;
+      for (int i = 0; ; i++) {
+        tmp.SetPreset(i);
+	if (tmp.preset_num != i) break;
+	tmp.Print();
       }
       return true;
     }
 
+    if (!strcmp(cmd, "set_font") && arg) {
+      current_preset_.font = mkstr(arg);
+      current_preset_.Save();
+      return true;
+    }
+
+    if (!strcmp(cmd, "set_track") && arg) {
+      current_preset_.track = mkstr(arg);
+      current_preset_.Save();
+      return true;
+    }
+
+    if (!strcmp(cmd, "set_name") && arg) {
+      current_preset_.name = mkstr(arg);
+      current_preset_.Save();
+      return true;
+    }
+
+#define SET_STYLE_CMD(N)                             \
+    if (!strcmp(cmd, "set_style" #N) && arg) {        \
+      current_preset_.current_style##N = mkstr(arg); \
+      current_preset_.Save();                        \
+      return true;                                   \
+    }
+    ONCEPERBLADE(SET_STYLE_CMD)
+
+    if (!strcmp(cmd, "move_preset") && arg) {
+      int32_t pos = strtol(arg, NULL, 0);
+      current_preset_.SaveAt(pos);
+      return true;      
+    }
+
+    if (!strcmp(cmd, "duplicate_preset") && arg) {
+      int32_t pos = strtol(arg, NULL, 0);
+      current_preset_.preset_num = -1;
+      current_preset_.SaveAt(pos);
+      return true;      
+    }
+
+    if (!strcmp(cmd, "delete_preset") && arg) {
+      current_preset_.SaveAt(-1);
+      return true;      
+    }
+
+    if (!strcmp(cmd, "show_current_preset")) {
+      current_preset_.Print();
+      return true;
+    }
+
     if (!strcmp(cmd, "get_preset")) {
-      STDOUT.println(current_preset_ - current_config_->presets);
+      STDOUT.println(current_preset_.preset_num);
       return true;
     }
     if (!strcmp(cmd, "get_volume")) {
@@ -1653,13 +1698,7 @@ public:
     
     if (!strcmp(cmd, "set_preset") && arg) {
       size_t preset = strtol(arg, NULL, 0);
-      if (preset < current_config_->num_presets) {
-        Preset *p = current_config_->presets + preset;
-        if (p != current_preset_) {
-          SetPreset(p, true);
-          SaberBase::DoNewFont();
-        }
-      }
+      SetPreset(preset, true);
       return true;
     }
     
@@ -1702,6 +1741,36 @@ public:
       LOCK_SD(false);
       return true;
     }
+
+    if (!strcmp(cmd, "list_fonts")) {
+      LOCK_SD(true);
+      for (LSFS::Iterator iter("/"); iter; ++iter) {
+        if (iter.isdir()) {
+          char fname[128];
+          strcpy(fname, iter.name());
+          strcat(fname, "/");
+          char* fend = fname + strlen(fname);
+          bool isfont = false;
+          if (!isfont) {
+            strcpy(fend, "hum.wav");
+            isfont = LSFS::Exists(fname);
+          }
+          if (!isfont) {
+            strcpy(fend, "hum01.wav");
+            isfont = LSFS::Exists(fname);
+          }
+          if (!isfont) {
+            strcpy(fend, "hum");
+            isfont = LSFS::Exists(fname);
+          }
+          if (isfont) {
+	    STDOUT.println(iter.name());
+          }
+        }
+      }
+      LOCK_SD(false);
+      return true;
+    }
 #endif
     return false;
   }
@@ -1722,8 +1791,7 @@ public:
   }
 
 private:
-  BladeConfig* current_config_ = NULL;
-  Preset* current_preset_ = NULL;
+  CurrentPreset current_preset_;
   LoopCounter accel_loop_counter_;
 };
 
@@ -2189,8 +2257,8 @@ class Commands : public CommandParser {
 #ifdef ENABLE_SD
     if (!strcmp(cmd, "dir")) {
       LOCK_SD(true);
-      if (LSFS::Exists(e ? e : current_directory)) {
-        for (LSFS::Iterator dir(e ? e : current_directory); dir; ++dir) {
+      if (!e || LSFS::Exists(e)) {
+        for (LSFS::Iterator dir(e ? e : ""); dir; ++dir) {
           STDOUT.print(dir.name());
           STDOUT.print(" ");
           STDOUT.println(dir.size());
@@ -2199,6 +2267,24 @@ class Commands : public CommandParser {
       } else {
         STDOUT.println("No such directory.");
       }
+      LOCK_SD(false);
+      return true;
+    }
+    
+    if (!strcmp(cmd, "cat") && e) {
+      LOCK_SD(true);
+      File f = LSFS::Open(e);
+      while (f.available()) {
+        STDOUT.write(f.read());
+      }
+      f.close();
+      LOCK_SD(false);
+      return true;
+    }
+    
+    if (!strcmp(cmd, "del") && e) {
+      LOCK_SD(true);
+      LSFS::Remove(e);
       LOCK_SD(false);
       return true;
     }
@@ -2386,6 +2472,10 @@ class Commands : public CommandParser {
       STDOUT.println(mallinfo().uordblks);
       STDOUT.print("Free: ");
       STDOUT.println(mallinfo().fordblks);
+      return true;
+    }
+    if (!strcmp(cmd, "make_default_console")) {
+      default_output = stdout_output;
       return true;
     }
 #if 0
@@ -2670,6 +2760,19 @@ public:
   static const char* response_footer() { return "-+=END_OUTPUT=+-\n"; }
 };
 
+#ifdef USB_CLASS_WEBUSB
+class WebUSBSerialAdapter {
+public:
+  static void begin() { WebUSBSerial.begin(115200); }
+  // static bool Connected() { return !!WebUSBSerial; }
+  static bool Connected() { return true; }
+  static bool AlwaysConnected() { return true; }
+  static Stream& stream() { return WebUSBSerial; }
+  static const char* response_header() { return "-+=BEGIN_OUTPUT=+-\n"; }
+  static const char* response_footer() { return "-+=END_OUTPUT=+-\n"; }
+};
+#endif
+
 // Command-line parser. Easiest way to use it is to start the arduino
 // serial monitor.
 template<class SA> /* SA = Serial Adapter */
@@ -2795,7 +2898,14 @@ Parser<SerialAdapter> parser;
 
 #ifdef ENABLE_SERIAL
 Parser<Serial3Adapter> serial_parser;
+#define ENABLE_SERIAL_COMMANDS
+#endif
 
+#ifdef USB_CLASS_WEBUSB
+Parser<WebUSBSerialAdapter> webusb_parser;
+#endif
+
+#ifdef ENABLE_SERIAL_COMMANDS
 class SerialCommands : public CommandParser {
  public:
   void HM1XCmd(const char* cmd) {
@@ -2844,10 +2954,6 @@ class SerialCommands : public CommandParser {
       STDOUT.println(e);
       return true;
     }
-    if (!strcmp(cmd, "make_default_console")) {
-      default_output = stdout_output;
-      return true;
-    }
 #ifdef BLE_PASSWORD
     if (!strcmp(cmd, "get_ble_config")) {
       PrintQuotedValue("password", BLE_PASSWORD);
@@ -2881,6 +2987,7 @@ class SerialCommands : public CommandParser {
 SerialCommands serial_commands;
 
 #endif
+
 
 #if defined(ENABLE_MOTION) || defined(ENABLE_SSD1306)
 #include "common/i2cdevice.h"
@@ -3073,71 +3180,6 @@ void setup() {
   }
 #endif // ENABLE_AUDIO && ENABLE_SD
 }
-
-#if 0
-extern "C" void startup_early_hook(void) {
-#ifdef ENABLE_WATCHDOG
-  // The next 2 lines sets the time-out value. This is the value that the watchdog timer compares itself to
-  WDOG_TOVALL = 1000;
-  WDOG_TOVALH = 0;
-  WDOG_STCTRLH = (WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN |
-                  WDOG_STCTRLH_STOPEN |
-                  WDOG_STCTRLH_WAITEN | WDOG_STCTRLH_STOPEN); // Enable WDG
-  WDOG_PRESC = 0; // prescaler
-#elif defined(KINETISK)
-        WDOG_STCTRLH = WDOG_STCTRLH_ALLOWUPDATE;
-#elif defined(KINETISL)
-        SIM_COPC = 0;  // disable the watchdog
-#endif
-        // enable clocks to always-used peripherals
-#if defined(__MK20DX128__)
-        SIM_SCGC5 = 0x00043F82;         // clocks active to all GPIO
-        SIM_SCGC6 = SIM_SCGC6_RTC | SIM_SCGC6_FTM0 | SIM_SCGC6_FTM1 | SIM_SCGC6_ADC0 | SIM_SCGC6_FTFL;
-#elif defined(__MK20DX256__)
-        SIM_SCGC3 = SIM_SCGC3_ADC1 | SIM_SCGC3_FTM2;
-        SIM_SCGC5 = 0x00043F82;         // clocks active to all GPIO
-        SIM_SCGC6 = SIM_SCGC6_RTC | SIM_SCGC6_FTM0 | SIM_SCGC6_FTM1 | SIM_SCGC6_ADC0 | SIM_SCGC6_FTFL;
-#elif defined(__MK64FX512__) || defined(__MK66FX1M0__)
-        SIM_SCGC3 = SIM_SCGC3_ADC1 | SIM_SCGC3_FTM2 | SIM_SCGC3_FTM3;
-        SIM_SCGC5 = 0x00043F82;         // clocks active to all GPIO
-        SIM_SCGC6 = SIM_SCGC6_RTC | SIM_SCGC6_FTM0 | SIM_SCGC6_FTM1 | SIM_SCGC6_ADC0 | SIM_SCGC6_FTFL;
-        //PORTC_PCR5 = PORT_PCR_MUX(1) | PORT_PCR_DSE | PORT_PCR_SRE;
-        //GPIOC_PDDR |= (1<<5);
-        //GPIOC_PSOR = (1<<5);
-        //while (1);
-#elif defined(__MKL26Z64__)
-        SIM_SCGC4 = SIM_SCGC4_USBOTG | 0xF0000030;
-        SIM_SCGC5 = 0x00003F82;         // clocks active to all GPIO
-        SIM_SCGC6 = SIM_SCGC6_ADC0 | SIM_SCGC6_TPM0 | SIM_SCGC6_TPM1 | SIM_SCGC6_TPM2 | SIM_SCGC6_FTFL;
-#endif
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-        SCB_CPACR = 0x00F00000;
-#endif
-#if defined(__MK66FX1M0__)
-        LMEM_PCCCR = 0x85000003;
-#endif
-}
-#endif
-
-#ifdef ENABLE_WATCHDOG
-class WatchDog : Looper {
-  const char* name() override { return "WatchDog"; }
-  void Loop() override {
-    if (watchdogTimer_ > 5) {
-      watchdogTimer_ = 0;
-      
-      noInterrupts();
-      WDOG_REFRESH = 0xA602;
-      WDOG_REFRESH = 0xB480;
-      interrupts();
-    }
-  };
-
-  elapsedMillis watchdogTimer_;
-};
-
-WatchDog dog;
-#endif
 
 #ifdef MTP_RX_ENDPOINT
 

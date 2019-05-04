@@ -4,8 +4,9 @@
 #ifdef ENABLE_FASTLED
 #include "abstract_blade.h"
 
-// Needed for "displayMemory"
-#include "monopodws.h"
+// Common
+DMAMEM int displayMemory[maxLedsPerStrip * 24 / 4 + 1];
+
 #include <FastLED.h>
 
 // FASTLED-type blade implementation.
@@ -83,11 +84,13 @@ public:
     if (on_) *on = true;
   }
   void SB_On() override {
+    AbstractBlade::SB_On();
     Power(true);
     delay(10);
     on_ = true;
   }
   void SB_Off() override {
+    AbstractBlade::SB_Off();
     on_ = false;
   }
 

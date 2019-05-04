@@ -148,10 +148,12 @@ public:
     if (on_ || power_) *on = true;
   }
   void SB_On() override {
+    AbstractBlade::SB_On();
     battery_monitor.SetLoad(true);
     power_ = on_ = true;
   }
   void SB_Off() override {
+    AbstractBlade::SB_Off();
     battery_monitor.SetLoad(false);
     on_ = false;
   }
@@ -180,7 +182,8 @@ protected:
     // Make sure the booster is running so we don't get low voltage
     // and under-drive any FETs.
     EnableBooster();
-    current_style_->run(this);
+    if (current_style_)
+      current_style_->run(this);
   }
 
 private:
